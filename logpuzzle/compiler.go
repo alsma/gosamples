@@ -3,39 +3,42 @@ package logpuzzle
 import (
 	"bytes"
 	"github.com/alsma/gosamples/logpuzzle/parser"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"sort"
-	"sync"
-
-	"fmt"
 	"image"
 	"image/draw"
+	"image/gif"
 	_ "image/gif"
+	"image/jpeg"
 	_ "image/jpeg"
 	"image/png"
 	_ "image/png"
+	"io/ioutil"
+	"log"
+	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"errors"
 )
 
 type partsStream <-chan parser.ImagePart
 
-func CompilePuzzle(p partsStream) <-chan string {
-	c := make(chan string, 1)
+func CompilePuzzle(p partsStream) <-chan *image.RGBA {
+	c := make(chan *image.RGBA, 1)
 
 	go func() {
 		var wg sync.WaitGroup
 		downloaded := make(chan *downloadResult)
 
 		for part := range p {
+			_p := part
 			// increment latch count
 			wg.Add(1)
 
 			// download each image in own goroutine
 			go func() {
-				downloaded <- download(part)
+				downloaded <- download(_p)
 				wg.Done()
 			}()
 		}
@@ -49,8 +52,6 @@ func CompilePuzzle(p partsStream) <-chan string {
 		orderedURLs := make([]string, 0)
 		sumWidth, maxHeight := 0, 0
 
-		//p := image.Point{0,0}
-
 		for i := range downloaded {
 			partIMG, _, err := image.Decode(bytes.NewReader(i.data))
 			if err != nil {
@@ -60,7 +61,6 @@ func CompilePuzzle(p partsStream) <-chan string {
 			URLIndexedMap[i.URL] = partIMG
 			orderedURLs = append(orderedURLs, i.URL)
 
-			//p.Add()
 			upperBound := partIMG.Bounds().Max
 			sumWidth = sumWidth + upperBound.X
 			if upperBound.Y > maxHeight {
@@ -68,13 +68,9 @@ func CompilePuzzle(p partsStream) <-chan string {
 			}
 		}
 
-		//fmt.Printf("%v", orderedURLs)
-		//sort.Sort(UrlsByPart(orderedURLs))
-		sort.Strings(orderedURLs)
-		//fmt.Printf("/n/n%v", orderedURLs)
+		sort.Sort(UrlsByPart(orderedURLs))
 
-		//resRect := image.Rect(0, 0, sumWidth, maxHeight)
-		resRect := image.Rect(0, 0, 800, 600)
+		resRect := image.Rect(0, 0, sumWidth, maxHeight)
 		resRGBA := image.NewRGBA(resRect)
 
 		curPosition := 0
@@ -83,24 +79,37 @@ func CompilePuzzle(p partsStream) <-chan string {
 
 			draw.Draw(resRGBA, resRGBA.Bounds(), IMG, image.Point{curPosition, 0}, draw.Src)
 			curPosition = curPosition - IMG.Bounds().Max.X
-			fmt.Printf("%v", curPosition)
 		}
 
-		// TODO think how to guess extension
-		out, err := os.Create(fmt.Sprintf("./output%s", filepath.Ext(orderedURLs[0])))
-		if err != nil {
-			panic(err)
-		}
-		defer out.Close()
-
-		png.Encode(out, resRGBA)
-
-		c <- out.Name()
+		c <- resRGBA
 	}()
 
 	return c
 }
 
+func SaveImage(i *image.RGBA, sp string) error {
+	out, err := os.Create(sp)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	ext := filepath.Ext(sp)
+	switch ext[1:] {
+	case "png":
+		png.Encode(out, i)
+	case "jpeg", "jpg":
+		jpeg.Encode(out, i, nil)
+	case "gif":
+		gif.Encode(out, i, nil)
+	default:
+		return errors.New("Known formats are: png, jpeg, gif")
+	}
+
+	return nil
+}
+
+// synchronously download image part
 func download(ip parser.ImagePart) *downloadResult {
 	URL := ip.String()
 
@@ -139,6 +148,14 @@ func (urls UrlsByPart) Swap(i, j int) {
 	urls[i], urls[j] = urls[j], urls[i]
 }
 
+// extract valuable part of url for sorting
+// basically if base filename contains less then 2 dashes use whole name
 func extractValuablePartOfUrl(s string) string {
-	return s
+	name := filepath.Base(s)
+
+	if strings.Count(name, "-") < 2 {
+		return name
+	}
+
+	return s[strings.LastIndexAny(s, "-"):]
 }

@@ -8,12 +8,15 @@ import (
 	"github.com/alsma/gosamples/logpuzzle/utils"
 	"io/ioutil"
 	"os"
+	"regexp"
+	"sync"
 )
 
 const (
 	defaultDataDirectoryRelativePath             = "data/logpuzzle"
 	targetDirName                                = "target"
 	targetDirPerm                    os.FileMode = 0700
+	prefferableOutputFormat                      = "png"
 )
 
 func main() {
@@ -30,6 +33,8 @@ func main() {
 	utils.CheckReadableDirectoryExists(dataDir)
 	utils.EnsureDirectoryExists(targetDir, targetDirPerm)
 
+	var wg sync.WaitGroup
+
 	files, _ := ioutil.ReadDir(dataDir)
 	for _, f := range files {
 		if !f.Mode().IsRegular() {
@@ -40,10 +45,22 @@ func main() {
 		go parser.FindImageParts(fmt.Sprintf("%s/%s", dataDir, f.Name()), c)
 		res := logpuzzle.CompilePuzzle(c)
 
-		println(<-res)
+		wg.Add(1)
 
-		//for v := range c {
-		//	fmt.Println(v)
-		//}
+		go func(name string) {
+			i := <-res
+
+			r := regexp.MustCompile("[^a-z]")
+			name = r.ReplaceAllLiteralString(name, "_")
+			err := logpuzzle.SaveImage(i, fmt.Sprintf("%s/%s.%s", targetDir, name, prefferableOutputFormat))
+
+			if err != nil {
+				panic(err)
+			}
+
+			wg.Done()
+		}(f.Name())
 	}
+
+	wg.Wait()
 }

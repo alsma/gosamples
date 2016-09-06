@@ -18,12 +18,16 @@ func FindImageParts(fn string, c chan<- ImagePart) {
 	defer file.Close()
 
 	dupMap := make(map[string]bool)
+	defer close(c)
+
 	host := extractHostnameFromFilename(fn)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		if URLPath, ok := extractImageURLPath(line); ok && !dupMap[URLPath] {
+		URLPath, ok := extractImageURLPath(line)
+
+		if _, processed := dupMap[URLPath]; ok && !processed {
 			dupMap[URLPath] = true
 
 			c <- ImagePart{
@@ -32,7 +36,6 @@ func FindImageParts(fn string, c chan<- ImagePart) {
 			}
 		}
 	}
-	close(c)
 }
 
 func extractImageURLPath(s string) (URLPath string, isImage bool) {
