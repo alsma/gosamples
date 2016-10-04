@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/alsma/gosamples/logpuzzle"
+	"github.com/alsma/gosamples/logpuzzle/compiler"
 	"github.com/alsma/gosamples/logpuzzle/parser"
 	"github.com/alsma/gosamples/logpuzzle/utils"
 	"io/ioutil"
@@ -16,7 +16,7 @@ const (
 	defaultDataDirectoryRelativePath             = "data/logpuzzle"
 	targetDirName                                = "target"
 	targetDirPerm                    os.FileMode = 0700
-	prefferableOutputFormat                      = "png"
+	preferableOutputFormat                       = "png"
 )
 
 func main() {
@@ -43,7 +43,7 @@ func main() {
 
 		c := make(chan parser.ImagePart)
 		go parser.FindImageParts(fmt.Sprintf("%s/%s", dataDir, f.Name()), c)
-		res := logpuzzle.CompilePuzzle(c)
+		res := compiler.CompilePuzzle(c)
 
 		wg.Add(1)
 
@@ -52,7 +52,7 @@ func main() {
 
 			r := regexp.MustCompile("[^a-z]")
 			name = r.ReplaceAllLiteralString(name, "_")
-			err := logpuzzle.SaveImage(i, fmt.Sprintf("%s/%s.%s", targetDir, name, prefferableOutputFormat))
+			err := compiler.SaveImage(i, fmt.Sprintf("%s/%s.%s", targetDir, name, preferableOutputFormat))
 
 			if err != nil {
 				panic(err)

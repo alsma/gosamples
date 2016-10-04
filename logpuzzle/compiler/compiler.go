@@ -1,16 +1,14 @@
-package logpuzzle
+package compiler
 
 import (
 	"bytes"
+	"errors"
 	"github.com/alsma/gosamples/logpuzzle/parser"
 	"image"
 	"image/draw"
 	"image/gif"
-	_ "image/gif"
 	"image/jpeg"
-	_ "image/jpeg"
 	"image/png"
-	_ "image/png"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -19,7 +17,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"errors"
 )
 
 type partsStream <-chan parser.ImagePart
